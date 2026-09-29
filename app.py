@@ -1,193 +1,133 @@
-import streamlit as st
-import pandas as pd
-from models import Session, Transaction
+import tkinter as tk
+from tkinter import messagebox
+from PIL import Image, ImageTk
 
-session = Session()
+root = tk.Tk()
+root.title("MoneyMate - Login")
+root.geometry("900x500")
+root.configure(bg="#FFFFFF")
 
-st.set_page_config(page_title="MoneyMate", page_icon="moneymate.jpg", layout="wide")
+# Login and Signup Functions
+def check_login():
+    username = username_entry.get()
+    password = password_entry.get()
+    if username == "admin" and password == "moneymate123":
+        messagebox.showinfo("Success", "Login successful!")
+    else:
+        messagebox.showerror("Error", "Invalid username or password.")
 
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background-color: #FFFFFF;
-    }
-    .stButton>button {
-        background-color: #000080;
-        color: white;
-        border-radius: 8px;
-        padding: 10px 24px;
-        border: none;
-    }
-    [data-testid="stMetricValue"] {
-    color: #000080 !important;
-    }
-[data-testid="stMetricLabel"] {
-    color: #000080 !important;
-    }
-[data-testid="stSidebar"] {
-    color: #000080 !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+def check_signup():
+    messagebox.showinfo("Success", "Account created! Please log in.")
+    show_login()
 
-# MoneyMate Sidebar Template
-with st.sidebar:
-    st.markdown(
-        "<h2 style='color': white; font-family: Montserrat, sans-serif; text-align: center;'>MoneyMate</h2>",
-        unsafe_allow_html=True
-    )
-    page = st.radio(
-        "Navigation",
-        ["Dashboard", "Transactions", "Categories", "Reports", "Settings"],
-        label_visibility="collapsed"
-    )
-# MoneyMate Logo and Description
-with st.container(border=True):
-    left, center, right = st.columns([1, 2, 1])
+def clear_placeholder(event, entry, placeholder):
+    if entry.get() == placeholder:
+        entry.delete(0, tk.END)
 
-    with center:
-        st.image("moneymate_horizontal.jpg", width=1200)
+def toggle_password_visibility(entry, button):
+    if entry.cget("show") == "*":
+        entry.config(show="")
+        button.config(text="🙈")
+    else:
+        entry.config(show="*")
+        button.config(text="👁")
 
-        st.markdown(
-            "<p style='color: #000080; text-align: center; "
-            "font-family: Montserrat, sans-serif; font-size: 28px; "
-            "margin: 0 0 50px 0;'>"
-            "Track your income, expenses, and budget all in one place."
-            "</p>",
-            unsafe_allow_html=True
-        )
+def make_input_field(parent, icon_text, placeholder, is_password=False):
+    frame = tk.Frame(parent, bg="#FFFFFF", highlightbackground="#CCCCCC", highlightthickness=1)
+    frame.pack(padx=60, pady=8, fill="x")
 
-st.markdown("<hr style='border: 2px solid #000080;'>", unsafe_allow_html=True)
+    icon = tk.Label(frame, text=icon_text, font=("Arial", 12), bg="#FFFFFF", fg="#000080")
+    icon.pack(side="left", padx=(10, 5), pady=10)
 
-# Income Input Textbox
-st.markdown(
-    "<h3 style='color: #000080; text-align: left; "
-    "font-family: Montserrat, sans-serif; font-size: 28px;'>"
-    "Enter your income amount (₱):</h3>",
-    unsafe_allow_html=True
-)
+    entry = tk.Entry(frame, font=("Montserrat", 11), border=0, show="*" if is_password else "")
+    entry.insert(0, placeholder)
+    entry.pack(side="left", fill="x", expand=True, pady=10)
+    entry.bind("<FocusIn>", lambda event: clear_placeholder(event, entry, placeholder))
 
-income_col, expense_col = st.columns(2)
+    if is_password:
+        toggle_button = tk.Button(frame, text="👁", font=("Arial", 10), bg="#FFFFFF", fg="#000080", border=0)
+        toggle_button.config(command=lambda: toggle_password_visibility(entry, toggle_button))
+        toggle_button.pack(side="left", padx=(0, 10))
 
-# Income Section
-with income_col:
-    with st.container(border=True):
-        st.markdown(
-            "<h3 style='color: #000080; font-family: Montserrat, sans-serif; font-size: 28px; text-decoration: underline;'>Add Income</h3>",
-            unsafe_allow_html=True
-        )
+    return entry
 
-        income_type = st.selectbox(
-            "Select income type:",
-            ["Allowance", "Salary/Wages", "Freelance/Side Job", "Scholarship/Grant", "Gift", "Other"]
-        )
+def clear_right_frame():
+    for widget in right_frame.winfo_children():
+        widget.destroy()
 
-        income = st.number_input(
-            "Enter your income amount (₱):",
-            min_value=0.0,
-            max_value=1000000.0,
-            step=100.0
-        )
+# Login UI
+def show_login():
+    global username_entry, password_entry
+    clear_right_frame()
 
-        if st.button("Add Income"):
-            new_entry = Transaction(type="income", category=income_type, amount=income)
-            session.add(new_entry)
-            session.commit()
-            st.success(f"Added ₱{income:.2f} from {income_type}!")
+    welcome_label = tk.Label(right_frame, text="Welcome Back", font=("Montserrat", 20, "bold"), fg="#000080", bg="#FFFFFF")
+    welcome_label.pack(anchor="w", padx=60, pady=(100, 5))
 
-# Expense Section
-with expense_col:
-    with st.container(border=True):
-        st.markdown(
-            "<h3 style='color: #000080; font-family: Montserrat, sans-serif; font-size: 28px; text-decoration: underline;'>Add Expense</h3>",
-            unsafe_allow_html=True
-        )
+    subtitle_label = tk.Label(right_frame, text="Track your income, expenses, and build a better future.", font=("Montserrat", 10), fg="#666666", bg="#FFFFFF")
+    subtitle_label.pack(anchor="w", padx=60, pady=(0, 30))
 
-        expense_type = st.selectbox(
-            "Select expense category:",
-            ["Food", "Transportation", "Bills", "School Supplies", "Shopping", "Other"]
-        )
+    username_entry = make_input_field(right_frame, "✉", "Email address")
+    password_entry = make_input_field(right_frame, "🔒", "Password", is_password=True)
 
-        expense = st.number_input(
-            "Enter your expense amount (₱):",
-            min_value=0.0,
-            max_value=1000000.0,
-            step=100.0,
-            key="expense_input"
-        )
+    login_button = tk.Button(right_frame, text="Log In", font=("Montserrat", 11, "bold"), bg="#000080", fg="white", relief="flat", command=check_login)
+    login_button.pack(padx=60, pady=20, ipady=8, fill="x")
 
-        if st.button("Add Expense"):
-            new_entry = Transaction(type="expense", category=expense_type, amount=expense)
-            session.add(new_entry)
-            session.commit()
-            st.success(f"Added ₱{expense:.2f} to {expense_type}!")
+    def on_enter(event):
+        login_button.config(bg="#0000A0")
 
-st.markdown("<hr style='border: 2px solid #000080;'>", unsafe_allow_html=True)
+    def on_leave(event):
+        login_button.config(bg="#000080")
 
-# Transaction History
-st.markdown("<h3 style='color: #000080; font-family: Montserrat, sans-serif; font-size: 28px; text-decoration: underline;'>Transaction History</h3>", unsafe_allow_html=True)
+    login_button.bind("<Enter>", on_enter)
+    login_button.bind("<Leave>", on_leave)
 
-transactions = session.query(Transaction).all()
+    switch_label = tk.Label(right_frame, text="Don't have an account? Sign Up", font=("Montserrat", 9, "underline"), fg="#000080", bg="#FFFFFF", cursor="hand2")
+    switch_label.pack(pady=10)
+    switch_label.bind("<Button-1>", lambda event: show_signup())
 
-data = []
-for t in transactions:
-    data.append({
-        "ID": t.id,
-        "Date": t.date,
-        "Type": t.type.capitalize(),
-        "Category": t.category,
-        "Amount (₱)": f"{t.amount:,.2f}"
-    })
+# Signup UI
+def show_signup():
+    global signup_name_entry, signup_email_entry, signup_password_entry
+    clear_right_frame()
 
-df = pd.DataFrame(data)
-st.dataframe(df, use_container_width=True, hide_index=True)
+    title_label = tk.Label(right_frame, text="Create Your Account", font=("Montserrat", 20, "bold"), fg="#000080", bg="#FFFFFF")
+    title_label.pack(anchor="w", padx=60, pady=(80, 5))
 
-# Delete Option
-if transactions:
-    delete_id = st.selectbox(
-        "Select a transaction ID to delete:",
-        [t.id for t in transactions]
-    )
-    if st.button("Delete Selected Transaction"):
-        entry_to_delete = session.query(Transaction).filter_by(id=delete_id).first()
-        session.delete(entry_to_delete)
-        session.commit()
-        st.rerun()
+    subtitle_label = tk.Label(right_frame, text="Get started and take control of your finances today.", font=("Montserrat", 10), fg="#666666", bg="#FFFFFF")
+    subtitle_label.pack(anchor="w", padx=60, pady=(0, 20))
 
-st.markdown("<hr style='border: 2px solid #000080;'>", unsafe_allow_html=True)
+    signup_name_entry = make_input_field(right_frame, "👤", "Full Name")
+    signup_email_entry = make_input_field(right_frame, "✉", "Email address")
+    signup_password_entry = make_input_field(right_frame, "🔒", "Password", is_password=True)
 
-# Transaction Summary
-st.markdown("<h3 style='color: #000080; font-family: Montserrat, sans-serif; font-size: 28px;'>Transaction Summary</h3>", unsafe_allow_html=True)
+    signup_button = tk.Button(right_frame, text="Sign Up", font=("Montserrat", 11, "bold"), bg="#000080", fg="white", relief="flat", command=check_signup)
+    signup_button.pack(padx=60, pady=20, ipady=8, fill="x")
 
-transactions = session.query(Transaction).all()
-total_income = sum(t.amount for t in transactions if t.type == "income")
-total_expense = sum(t.amount for t in transactions if t.type == "expense")
-balance = total_income - total_expense
+    switch_label = tk.Label(right_frame, text="Already have an account? Log In", font=("Montserrat", 9, "underline"), fg="#000080", bg="#FFFFFF", cursor="hand2")
+    switch_label.pack(pady=10)
+    switch_label.bind("<Button-1>", lambda event: show_login())
 
-sum_col1, sum_col2, sum_col3 = st.columns(3)
-with sum_col1:
-    st.metric("Total Income", f"₱{total_income:,.2f}")
-with sum_col2:
-    st.metric("Total Expenses", f"₱{total_expense:,.2f}")
-with sum_col3:
-    st.metric("Remaining Balance", f"₱{balance:,.2f}")
-   
-st.markdown("<hr style='border: 2px solid #000080;'>", unsafe_allow_html=True)
+# Left Side (Logo Panel)
+left_frame = tk.Frame(root, bg="#FFFFFF", width=400)
+left_frame.pack(side="left", fill="both", expand=True)
 
-# Expense Summary Chart
-st.markdown("<h3 style='color: #000080; font-family: Montserrat, sans-serif; font-size: 28px;'>Expense Summary Chart</h3>", unsafe_allow_html=True)
+logo_image = Image.open("moneymate.jpg")
+logo_image = logo_image.resize((600, 600))
+logo_photo = ImageTk.PhotoImage(logo_image)
 
-expense_data = {}
-for t in transactions:
-    if t.type == "expense":
-        expense_data[t.category] = expense_data.get(t.category, 0) + t.amount
+logo_label = tk.Label(left_frame, image=logo_photo, bg="#FFFFFF")
+logo_label.pack(expand=True)
+logo_label.image = logo_photo
 
-if expense_data:
-    chart_df = pd.DataFrame(list(expense_data.items()), columns=["Category", "Amount"])
-    chart_df = chart_df.set_index("Category")
-    st.bar_chart(chart_df)
-else:
-    st.write("No expense data available to display the chart.")
+# Divider
+divider = tk.Frame(root, bg="#CCCCCC", width=1.5, height=850)
+divider.pack(side="left")
+divider.pack_propagate(False)
+
+# Right Side (Login Panel)
+right_frame = tk.Frame(root, bg="#FFFFFF", width=500)
+right_frame.pack(side="right", fill="both", expand=True)
+
+show_login()
+
+root.mainloop()
