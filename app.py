@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk
+from models import Session, User, hash_password
 
 root = tk.Tk()
 root.title("MoneyMate - Login")
@@ -8,17 +9,51 @@ root.geometry("900x500")
 root.configure(bg="#FFFFFF")
 
 # Login and Signup Functions
-def check_login():
-    username = username_entry.get()
-    password = password_entry.get()
-    if username == "admin" and password == "moneymate123":
-        messagebox.showinfo("Success", "Login successful!")
-    else:
-        messagebox.showerror("Error", "Invalid username or password.")
-
 def check_signup():
+    name = signup_name_entry.get().strip()
+    email = signup_email_entry.get().strip().lower()
+    password = signup_password_entry.get()
+
+    if name in ("", "Full Name") or email in ("", "Email address") or password in ("", "Password"):
+        messagebox.showerror("Error", "Please fill out all fields.")
+        return
+
+    if "@" not in email or "." not in email:
+        messagebox.showerror("Error", "Please enter a valid email address.")
+        return
+
+    if len(password) < 6:
+        messagebox.showerror("Error", "Password must be at least 6 characters.")
+        return
+
+    session = Session()
+    existing = session.query(User).filter_by(email=email).first()
+    if existing:
+        session.close()
+        messagebox.showerror("Error", "An account with that email already exists.")
+        return
+
+    session.add(User(full_name=name, email=email, password_hash=hash_password(password)))
+    session.commit()
+    session.close()
+
     messagebox.showinfo("Success", "Account created! Please log in.")
     show_login()
+
+def check_login():
+    email = username_entry.get().strip().lower()
+    password = password_entry.get()
+
+    session = Session()
+    user = session.query(User).filter_by(email=email).first()
+    full_name = user.full_name if user else None
+    valid = user is not None and user.password_hash == hash_password(password)
+    session.close()
+
+    if valid:
+        messagebox.showinfo("Success", f"Welcome, {full_name}!")
+    else:
+        messagebox.showerror("Error", "Invalid email or password.")
 
 def clear_placeholder(event, entry, placeholder):
     if entry.get() == placeholder:

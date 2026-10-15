@@ -15,6 +15,19 @@ class Transaction(Base):
     date = Column(Date, default=date.today)
     notes = Column(String, nullable=True)
 
+import hashlib
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    full_name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
 Base.metadata.create_all(engine)
 
 Session = sessionmaker(bind=engine)
