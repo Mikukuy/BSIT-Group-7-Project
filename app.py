@@ -51,7 +51,8 @@ def check_login():
     session.close()
 
     if valid:
-        messagebox.showinfo("Success", f"Welcome, {full_name}!")
+        root.withdraw()              
+        open_dashboard(full_name)    
     else:
         messagebox.showerror("Error", "Invalid email or password.")
 
@@ -163,6 +164,17 @@ divider.pack_propagate(False)
 right_frame = tk.Frame(root, bg="#FFFFFF", width=500)
 right_frame.pack(side="right", fill="both", expand=True)
 
+def open_dashboard(full_name):
+    dashboard = tk.Toplevel(root)
+    dashboard.title("MoneyMate - Dashboard")
+    dashboard.geometry("900x500")
+    dashboard.configure(bg="#FFFFFF")
+
+    dashboard.protocol("WM_DELETE_WINDOW", root.destroy)
+
+    tk.Label(dashboard, text=f"Welcome, {full_name}!",
+             font=("Montserrat", 20, "bold"), fg="#000080", bg="#FFFFFF").pack(pady=40)
+    
 show_login()
 
 root.mainloop()
