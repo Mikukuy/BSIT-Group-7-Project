@@ -16,7 +16,7 @@ def check_signup():
     email = signup_email_entry.get().strip().lower()
     password = signup_password_entry.get()
 
-    if name in ("", "Full Name") or email in ("", "Email address") or password in ("", "Password"):
+    if name in ("", "Username") or email in ("", "Email address") or password in ("", "Password"):
         messagebox.showerror("Error", "Please fill out all fields.")
         return
 
@@ -24,8 +24,12 @@ def check_signup():
         messagebox.showerror("Error", "Please enter a valid email address.")
         return
 
-    if len(password) < 6:
-        messagebox.showerror("Error", "Password must be at least 6 characters.")
+    if len(password) < 8 or len(password) > 13:
+        messagebox.showerror("Error", "Password must be 8 to 13 characters long.")
+        return
+
+    if not any(not c.isalnum() for c in password):
+        messagebox.showerror("Error", "Password must include at least one special character.")
         return
 
     session = Session()
@@ -134,7 +138,7 @@ def show_signup():
     subtitle_label = tk.Label(right_frame, text="Get started and take control of your finances today.", font=("Montserrat", 10), fg="#666666", bg="#FFFFFF")
     subtitle_label.pack(anchor="w", padx=60, pady=(0, 20))
 
-    signup_name_entry = make_input_field(right_frame, "👤", "Full Name")
+    signup_name_entry = make_input_field(right_frame, "👤", "Username")
     signup_email_entry = make_input_field(right_frame, "✉", "Email address")
     signup_password_entry = make_input_field(right_frame, "🔒", "Password", is_password=True)
 
