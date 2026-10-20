@@ -1,14 +1,27 @@
+from datetime import datetime
 import tkinter as tk
-from tkinter import messagebox
-from PIL import Image, ImageTk
-from models import Session, User, hash_password
 from tkinter import messagebox, ttk
+from PIL import Image, ImageTk
 from models import Session, User, Transaction, hash_password
 
 root = tk.Tk()
 root.title("MoneyMate - Login")
 root.geometry("900x500")
 root.configure(bg="#FFFFFF")
+
+# Session state (in memory)
+current_user_id = None
+user_budgets = {}
+custom_categories = {"income": [], "expense": []}
+
+
+def user_transactions(session):
+    """Transactions of the logged-in user. Works with or without a user_id column."""
+    query = session.query(Transaction)
+    if hasattr(Transaction, "user_id") and current_user_id is not None:
+        query = query.filter_by(user_id=current_user_id)
+    return query
+
 
 # Login and Signup Functions
 def check_signup():
@@ -26,6 +39,10 @@ def check_signup():
 
     if len(password) < 8 or len(password) > 13:
         messagebox.showerror("Error", "Password must be 8 to 13 characters long.")
+        return
+
+    if len(name) < 3 or len(name) > 20:
+        messagebox.showerror("Error", "Username must be 3 to 20 characters long.")
         return
 
     if not any(not c.isalnum() for c in password):
@@ -46,7 +63,9 @@ def check_signup():
     messagebox.showinfo("Success", "Account created! Please log in.")
     show_login()
 
+
 def check_login():
+    global current_user_id
     email = username_entry.get().strip().lower()
     password = password_entry.get()
 
@@ -54,17 +73,21 @@ def check_login():
     user = session.query(User).filter_by(email=email).first()
     full_name = user.full_name if user else None
     valid = user is not None and user.password_hash == hash_password(password)
+    user_id = user.id if valid else None
     session.close()
 
     if valid:
-        root.withdraw()              
-        open_dashboard(full_name)    
+        current_user_id = user_id
+        root.withdraw()
+        open_dashboard(full_name)
     else:
         messagebox.showerror("Error", "Invalid email or password.")
+
 
 def clear_placeholder(event, entry, placeholder):
     if entry.get() == placeholder:
         entry.delete(0, tk.END)
+
 
 def toggle_password_visibility(entry, button):
     if entry.cget("show") == "*":
@@ -73,6 +96,7 @@ def toggle_password_visibility(entry, button):
     else:
         entry.config(show="*")
         button.config(text="👁")
+
 
 def make_input_field(parent, icon_text, placeholder, is_password=False):
     frame = tk.Frame(parent, bg="#FFFFFF", highlightbackground="#CCCCCC", highlightthickness=1)
@@ -93,9 +117,11 @@ def make_input_field(parent, icon_text, placeholder, is_password=False):
 
     return entry
 
+
 def clear_right_frame():
     for widget in right_frame.winfo_children():
         widget.destroy()
+
 
 # Login UI
 def show_login():
@@ -127,6 +153,7 @@ def show_login():
     switch_label.pack(pady=10)
     switch_label.bind("<Button-1>", lambda event: show_signup())
 
+
 # Signup UI
 def show_signup():
     global signup_name_entry, signup_email_entry, signup_password_entry
@@ -149,6 +176,7 @@ def show_signup():
     switch_label.pack(pady=10)
     switch_label.bind("<Button-1>", lambda event: show_login())
 
+
 # Left Side (Logo Panel)
 left_frame = tk.Frame(root, bg="#FFFFFF", width=400)
 left_frame.pack(side="left", fill="both", expand=True)
@@ -170,6 +198,7 @@ divider.pack_propagate(False)
 right_frame = tk.Frame(root, bg="#FFFFFF", width=500)
 right_frame.pack(side="right", fill="both", expand=True)
 
+
 # Dashboard UI
 def open_dashboard(full_name):
     dashboard = tk.Toplevel(root)
@@ -186,7 +215,7 @@ def open_dashboard(full_name):
     tk.Label(sidebar, text="MoneyMate", font=("Montserrat", 14, "bold"),
              fg="#000080", bg="#FFFFFF").pack(pady=30)
 
-# Main Contents Area
+    # Main Contents Area
     content = tk.Frame(dashboard, bg="#F4F7FB")
     content.pack(side="right", fill="both", expand=True)
 
@@ -197,9 +226,9 @@ def open_dashboard(full_name):
     def show_dashboard_page():
         clear_content()
 
-    # Pull Data from the Database
+        # Pull Data from the Database
         session = Session()
-        transactions = session.query(Transaction).order_by(Transaction.id.desc()).all()
+        transactions = user_transactions(session).order_by(Transaction.id.desc()).all()
         rows = [(t.id, str(t.date), t.type, t.category, t.amount) for t in transactions]
         session.close()
 
@@ -207,7 +236,7 @@ def open_dashboard(full_name):
         total_expense = sum(r[4] for r in rows if r[2] == "expense")
         balance = total_income - total_expense
 
-    # Top Bar - MIGHT ADD MORE SOON
+        # Top Bar
         topbar = tk.Frame(content, bg="#F4F7FB")
         topbar.pack(fill="x", padx=30, pady=(20, 0))
         initials = "".join(w[0] for w in full_name.split()[:2]).upper()
@@ -355,13 +384,20 @@ def open_dashboard(full_name):
     def show_transactions_page():
         clear_content()
 
-        income_types = ["Allowance", "Salary/Wages", "Freelance/Side Job", "Scholarship/Grant", "Gift", "Other"]
-        expense_types = ["Food", "Transportation", "Bills", "School Supplies", "Shopping", "Other"]
+        income_types = [
+            "Allowance", "Salary/Wages", "Freelance/Side Job",
+            "Scholarship/Grant", "Gift", "Other"
+        ] + custom_categories["income"]
+
+        expense_types = [
+            "Food", "Transportation", "Bills",
+            "School Supplies", "Shopping", "Other"
+        ] + custom_categories["expense"]
 
         tk.Label(content, text="Transactions", font=("Montserrat", 20, "bold"),
                  fg="#000080", bg="#F4F7FB").pack(anchor="w", padx=30, pady=(30, 10))
 
-     # Forms Row
+    # Forms Row
         forms = tk.Frame(content, bg="#F4F7FB")
         forms.pack(fill="x", padx=30)
         forms.columnconfigure(0, weight=1, uniform="f")
@@ -395,8 +431,29 @@ def open_dashboard(full_name):
                 if value <= 0 or value > 1000000:
                     messagebox.showerror("Error", "Amount must be above 0 and not more than ₱1,000,000.")
                     return
+
+                # Budget warning (this month's spending in the chosen category)
+                chosen = category.get()
+                if tx_type == "expense" and chosen in user_budgets:
+                    now = datetime.now()
+                    chk = Session()
+                    spent = sum(
+                        t.amount
+                        for t in user_transactions(chk).filter_by(type="expense", category=chosen).all()
+                        if t.date.month == now.month and t.date.year == now.year
+                    )
+                    chk.close()
+                    if spent + value > user_budgets[chosen]:
+                        messagebox.showwarning(
+                            "Budget Warning",
+                            f"This will go over your ₱{user_budgets[chosen]:,.2f} budget for {chosen}.",
+                        )
+
                 session = Session()
-                session.add(Transaction(type=tx_type, category=category.get(), amount=value))
+                tx = Transaction(type=tx_type, category=chosen, amount=value)
+                if hasattr(Transaction, "user_id"):
+                    tx.user_id = current_user_id
+                session.add(tx)
                 session.commit()
                 session.close()
                 show_transactions_page()
@@ -409,7 +466,7 @@ def open_dashboard(full_name):
         build_form(0, "Add Income", income_types, "income")
         build_form(1, "Add Expense", expense_types, "expense")
 
-    # Table of All Transactions - TreeView
+        # Table of All Transactions - TreeView
         tk.Label(content, text="All Transactions", font=("Montserrat", 12, "bold"),
                  fg="#000080", bg="#F4F7FB").pack(anchor="w", padx=30, pady=(20, 5))
 
@@ -435,7 +492,7 @@ def open_dashboard(full_name):
         table.pack(side="left", fill="both", expand=True)
 
         session = Session()
-        for t in session.query(Transaction).order_by(Transaction.id.desc()).all():
+        for t in user_transactions(session).order_by(Transaction.id.desc()).all():
             table.insert("", "end", iid=str(t.id),
                          values=(t.id, str(t.date), t.type.capitalize(), t.category, f"{t.amount:,.2f}"))
         session.close()
@@ -461,15 +518,428 @@ def open_dashboard(full_name):
                   fg="white", bg="#B91C1C", activebackground="#991B1B",
                   activeforeground="white", relief="flat",
                   command=delete_selected).pack(anchor="e", padx=30, pady=15, ipadx=10, ipady=4)
-# Categories Page - Placeholder for Future Implementation
-    def show_categories_page():
+
+# Budget Management Page
+    def show_budget_page():
         clear_content()
-        tk.Label(content, text="Categories", font=("Montserrat", 20, "bold"),
-                 fg="#000080", bg="#F4F7FB").pack(anchor="w", padx=30, pady=30)
+        now = datetime.now()
+
+        expense_opts = ["Food", "Transportation", "Bills", "School Supplies", "Shopping", "Other"]
+
+    # This month's spending per category
+        session = Session()
+        spent_by_cat = {}
+        for t in user_transactions(session).filter_by(type="expense").all():
+            if t.date.month == now.month and t.date.year == now.year:
+                spent_by_cat[t.category] = spent_by_cat.get(t.category, 0) + t.amount
+        session.close()
+
+        total_budget = sum(user_budgets.values())
+        total_spent = sum(spent_by_cat.get(c, 0) for c in user_budgets)
+        remaining = total_budget - total_spent
+        daily_avg = total_spent / now.day
+
+        tk.Label(content, text="Budget Management", font=("Montserrat", 20, "bold"),
+                 fg="#000080", bg="#F4F7FB").pack(anchor="w", padx=30, pady=(30, 0))
+        tk.Label(content, text=f"Plan your budget and track your spending. ({now.strftime('%B %Y')})",
+                 font=("Montserrat", 11), fg="#666666", bg="#F4F7FB").pack(anchor="w", padx=30)
+
+    # Statistic Cards
+        def budget_card(parent, title, value, color):
+            card = tk.Frame(parent, bg="#FFFFFF", highlightbackground="#DDE3F0", highlightthickness=1)
+            tk.Label(card, text=title, font=("Montserrat", 10), fg="#666666",
+                     bg="#FFFFFF").pack(anchor="w", padx=20, pady=(12, 0))
+            tk.Label(card, text=value, font=("Montserrat", 16, "bold"), fg=color,
+                     bg="#FFFFFF").pack(anchor="w", padx=20, pady=(0, 12))
+            return card
+
+        cards = tk.Frame(content, bg="#F4F7FB")
+        cards.pack(fill="x", padx=30, pady=15)
+        card_data = [
+            ("Total Budget", f"₱ {total_budget:,.2f}", "#000080"),
+            ("Total Spent", f"₱ {total_spent:,.2f}", "#000080"),
+            ("Remaining", f"₱ {remaining:,.2f}", "#16A34A" if remaining >= 0 else "#DC2626"),
+            ("Daily Average", f"₱ {daily_avg:,.2f}", "#000080"),
+        ]
+        for i, (title, value, color) in enumerate(card_data):
+            cards.columnconfigure(i, weight=1, uniform="bcard")
+            budget_card(cards, title, value, color).grid(row=0, column=i, sticky="ew",
+                                                         padx=(0 if i == 0 else 10, 0))
+
+    # Main Row: budget categories (left) and set budget form (right)
+        main = tk.Frame(content, bg="#F4F7FB")
+        main.pack(fill="both", expand=True, padx=30, pady=(0, 20))
+        main.columnconfigure(0, weight=3, uniform="bmain")
+        main.columnconfigure(1, weight=2, uniform="bmain")
+
+    # Budget Categories List
+        cats = tk.Frame(main, bg="#FFFFFF", highlightbackground="#DDE3F0", highlightthickness=1)
+        cats.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        tk.Label(cats, text="Budget Categories", font=("Montserrat", 12, "bold"),
+                 fg="#000080", bg="#FFFFFF").pack(anchor="w", padx=20, pady=(15, 5))
+
+        def draw_bar(event, bar, pct, color):
+            bar.delete("fill")
+            bar.create_rectangle(0, 0, event.width * min(pct, 100) / 100, 8,
+                                 fill=color, width=0, tags="fill")
+
+        if not user_budgets:
+            tk.Label(cats, text="No budgets set yet. Set one on the right.",
+                     font=("Montserrat", 10), fg="#666666", bg="#FFFFFF").pack(anchor="w", padx=20, pady=10)
+
+        for cat, limit in user_budgets.items():
+            spent = spent_by_cat.get(cat, 0)
+            pct = spent / limit * 100 if limit else 0
+            color = "#DC2626" if pct > 100 else "#F59E0B" if pct >= 80 else "#2F80ED"
+
+            row = tk.Frame(cats, bg="#FFFFFF")
+            row.pack(fill="x", padx=20, pady=6)
+            top = tk.Frame(row, bg="#FFFFFF")
+            top.pack(fill="x")
+            tk.Label(top, text=cat, font=("Montserrat", 10, "bold"), fg="#000080",
+                     bg="#FFFFFF").pack(side="left")
+            tk.Label(top, text=f"{pct:.0f}%", font=("Montserrat", 10, "bold"), fg=color,
+                     bg="#FFFFFF").pack(side="right")
+            tk.Label(row, text=f"₱{spent:,.2f} / ₱{limit:,.2f}", font=("Montserrat", 9),
+                     fg="#666666", bg="#FFFFFF").pack(anchor="w")
+            bar = tk.Canvas(row, height=8, bg="#E6EBFA", highlightthickness=0)
+            bar.pack(fill="x", pady=(4, 0))
+            bar.bind("<Configure>", lambda e, b=bar, p=pct, c=color: draw_bar(e, b, p, c))
+
+        tk.Label(cats, text="Blue: on track   Orange: 80% or more   Red: over budget",
+                 font=("Montserrat", 8), fg="#888888", bg="#FFFFFF").pack(anchor="w", padx=20, pady=(10, 15))
+
+    # Set Budget Form
+        form = tk.Frame(main, bg="#FFFFFF", highlightbackground="#DDE3F0", highlightthickness=1)
+        form.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        tk.Label(form, text="Set Budget", font=("Montserrat", 12, "bold"),
+                 fg="#000080", bg="#FFFFFF").pack(anchor="w", padx=20, pady=(15, 5))
+
+        tk.Label(form, text="Expense Category", font=("Montserrat", 9), fg="#666666",
+                 bg="#FFFFFF").pack(anchor="w", padx=20)
+        b_cat_cb = ttk.Combobox(form, values=expense_opts, state="readonly", font=("Montserrat", 10))
+        b_cat_cb.current(0)
+        b_cat_cb.pack(fill="x", padx=20, pady=(2, 10), ipady=4)
+
+        tk.Label(form, text="Budget Limit (₱)", font=("Montserrat", 9), fg="#666666",
+                 bg="#FFFFFF").pack(anchor="w", padx=20)
+        b_limit_entry = tk.Entry(form, font=("Montserrat", 10), relief="solid", bd=1)
+        b_limit_entry.pack(fill="x", padx=20, pady=(2, 15), ipady=6)
+
+        def set_budget():
+            try:
+                val = float(b_limit_entry.get().replace(",", ""))
+            except ValueError:
+                messagebox.showerror("Error", "Please enter a valid amount.")
+                return
+            if val <= 0 or val > 1000000:
+                messagebox.showerror("Error", "Budget must be above 0 and not more than ₱1,000,000.")
+                return
+            user_budgets[b_cat_cb.get()] = val
+            show_budget_page()
+
+        def remove_budget():
+            cat = b_cat_cb.get()
+            if cat not in user_budgets:
+                messagebox.showwarning("Remove Budget", f"No budget is set for {cat}.")
+                return
+            del user_budgets[cat]
+            show_budget_page()
+
+        tk.Button(form, text="Save Budget", font=("Montserrat", 10, "bold"),
+                  fg="white", bg="#000080", activebackground="#1A1AA0",
+                  activeforeground="white", relief="flat",
+                  command=set_budget).pack(fill="x", padx=20, pady=(0, 8), ipady=6)
+        tk.Button(form, text="Remove Budget", font=("Montserrat", 10, "bold"),
+                  fg="white", bg="#B91C1C", activebackground="#991B1B",
+                  activeforeground="white", relief="flat",
+                  command=remove_budget).pack(fill="x", padx=20, pady=(0, 20), ipady=6)
+
+
+# Categories Page
+    def show_categories_page():
+        import re
+
+        clear_content()
+
+        tk.Label(
+            content,
+            text="Categories",
+            font=("Montserrat", 20, "bold"),
+            fg="#000080",
+            bg="#F4F7FB"
+        ).pack(anchor="w", padx=30, pady=(30, 5))
+
+        tk.Label(
+            content,
+            text="Create and manage your own income and expense categories.",
+            font=("Montserrat", 10),
+            fg="#666666",
+            bg="#F4F7FB"
+        ).pack(anchor="w", padx=30, pady=(0, 20))
+
+    # Initialize custom categories once per application session.
+        if not hasattr(show_categories_page, "custom_categories"):
+            show_categories_page.custom_categories = {
+                "income": [],
+                "expense": []
+            }
+
+        custom_categories = show_categories_page.custom_categories
+
+    # Main layout
+        main = tk.Frame(content, bg="#F4F7FB")
+        main.pack(fill="both", expand=True, padx=30, pady=(0, 20))
+
+    # Add Category Form
+        form = tk.Frame(
+            main,
+            bg="#FFFFFF",
+            highlightbackground="#DDE3F0",
+            highlightthickness=1
+        )
+        form.pack(fill="x", pady=(0, 20))
+
+        tk.Label(
+            form,
+            text="Add New Category",
+            font=("Montserrat", 12, "bold"),
+            fg="#000080",
+            bg="#FFFFFF"
+        ).pack(anchor="w", padx=20, pady=(15, 10))
+
+        tk.Label(
+            form,
+            text="Category Name",
+            font=("Montserrat", 9),
+            fg="#666666",
+            bg="#FFFFFF"
+        ).pack(anchor="w", padx=20)
+
+        name_var = tk.StringVar()
+
+        name_entry = tk.Entry(
+            form,
+            textvariable=name_var,
+            font=("Montserrat", 10),
+            relief="solid",
+            bd=1
+        )
+        name_entry.pack(fill="x", padx=20, pady=(5, 10), ipady=6)
+
+    # Limit input to 20 characters.
+        def limit_name(*args):
+            value = name_var.get()
+            if len(value) > 20:
+                name_var.set(value[:20])
+
+        name_var.trace_add("write", limit_name)
+
+        tk.Label(
+            form,
+            text="Type",
+            font=("Montserrat", 9),
+            fg="#666666",
+            bg="#FFFFFF"
+        ).pack(anchor="w", padx=20)
+
+        type_var = tk.StringVar(value="expense")
+
+        type_frame = tk.Frame(form, bg="#FFFFFF")
+        type_frame.pack(anchor="w", padx=20, pady=(5, 10))
+
+        tk.Radiobutton(
+            type_frame,
+            text="Expense",
+            variable=type_var,
+            value="expense",
+            bg="#FFFFFF",
+            fg="#000080",
+            activebackground="#FFFFFF",
+            font=("Montserrat", 9)
+        ).pack(side="left", padx=(0, 15))
+
+        tk.Radiobutton(
+            type_frame,
+            text="Income",
+            variable=type_var,
+            value="income",
+            bg="#FFFFFF",
+            fg="#000080",
+            activebackground="#FFFFFF",
+            font=("Montserrat", 9)
+        ).pack(side="left")
+
+        def add_category():
+        
+        # Normalize spaces and validate the entire input.
+            name = " ".join(name_var.get().split())
+
+            if len(name) < 3 or len(name) > 20:
+                messagebox.showerror(
+                    "Invalid Category",
+                    "Category name must contain 3 to 20 characters."
+                )
+                return
+
+        # Letters and numbers are allowed, but the name
+        # must begin with a letter. Spaces between words are allowed.
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9]*(?: [A-Za-z0-9]+)*", name):
+                messagebox.showerror(
+                    "Invalid Category",
+                    "Use letters, numbers, and single spaces only. "
+                    "The name must start with a letter."
+                )
+                return
+
+            category_type = type_var.get()
+            existing = custom_categories[category_type]
+
+            # Case-insensitive duplicate checking.
+            if any(item.casefold() == name.casefold() for item in existing):
+                messagebox.showerror(
+                    "Duplicate Category",
+                    "This category already exists for this type."
+                )
+                return
+
+        # Prevent collisions with the built-in transaction categories.
+            built_in = (
+                ["Allowance", "Salary/Wages", "Freelance/Side Job",
+                 "Scholarship/Grant", "Gift", "Other"]
+                if category_type == "income"
+                else ["Food", "Transportation", "Bills",
+                      "School Supplies", "Shopping", "Other"]
+            )
+
+            if any(item.casefold() == name.casefold() for item in built_in):
+                messagebox.showerror(
+                    "Duplicate Category",
+                    "This name is already a built-in category."
+                )
+                return
+
+            existing.append(name)
+            name_var.set("")
+            refresh_categories()
+
+            messagebox.showinfo(
+                "Success",
+                f"{name} was added to your {category_type} categories."
+            )
+
+        tk.Button(
+            form,
+            text="Add Category",
+            font=("Montserrat", 10, "bold"),
+            fg="white",
+            bg="#000080",
+            activebackground="#1A1AA0",
+            activeforeground="white",
+            relief="flat",
+            command=add_category
+        ).pack(anchor="w", padx=20, pady=(0, 20), ipadx=12, ipady=5)
+
+    # Category lists
+        lists = tk.Frame(main, bg="#F4F7FB")
+        lists.pack(fill="both", expand=True)
+
+        lists.columnconfigure(0, weight=1)
+        lists.columnconfigure(1, weight=1)
+
+        def refresh_categories():
+            for widget in lists.winfo_children():
+                widget.destroy()
+
+            for column, category_type in enumerate(("income", "expense")):
+                panel = tk.Frame(
+                    lists,
+                    bg="#FFFFFF",
+                    highlightbackground="#DDE3F0",
+                    highlightthickness=1
+                )
+                panel.grid(
+                    row=0,
+                    column=column,
+                    sticky="nsew",
+                    padx=(0, 10) if column == 0 else (10, 0)
+                )
+
+                title = category_type.capitalize() + " Categories"
+
+                tk.Label(
+                    panel,
+                    text=title,
+                    font=("Montserrat", 11, "bold"),
+                    fg="#000080",
+                    bg="#FFFFFF"
+                ).pack(anchor="w", padx=15, pady=(15, 10))
+
+                built_in = (
+                    ["Allowance", "Salary/Wages", "Freelance/Side Job",
+                     "Scholarship/Grant", "Gift", "Other"]
+                    if category_type == "income"
+                    else ["Food", "Transportation", "Bills",
+                          "School Supplies", "Shopping", "Other"]
+                )
+
+                for name in built_in:
+                    tk.Label(
+                        panel,
+                        text=f"{name}  •  Built-in",
+                        font=("Montserrat", 9),
+                        fg="#666666",
+                        bg="#FFFFFF"
+                    ).pack(anchor="w", padx=15, pady=3)
+
+                for name in custom_categories[category_type]:
+                    row = tk.Frame(panel, bg="#FFFFFF")
+                    row.pack(fill="x", padx=15, pady=3)
+
+                    tk.Label(
+                        row,
+                        text=name,
+                        font=("Montserrat", 9),
+                        fg="#000080",
+                        bg="#FFFFFF"
+                    ).pack(side="left")
+
+                    tk.Button(
+                        row,
+                        text="Remove",
+                        font=("Montserrat", 8),
+                        fg="#B91C1C",
+                        bg="#FFFFFF",
+                        relief="flat",
+                        command=lambda n=name, t=category_type:
+                            remove_category(n, t)
+                    ).pack(side="right")
+
+                if not custom_categories[category_type]:
+                    tk.Label(
+                        panel,
+                        text="No custom categories yet.",
+                        font=("Montserrat", 9),
+                        fg="#888888",
+                        bg="#FFFFFF"
+                    ).pack(anchor="w", padx=15, pady=8)
+
+        def remove_category(name, category_type):
+            if not messagebox.askyesno(
+                "Remove Category",
+                f"Remove '{name}' from your custom categories?"
+            ):
+                return
+
+            custom_categories[category_type].remove(name)
+            refresh_categories()
+
+        refresh_categories()
 
     nav_items = [
         ("Dashboard", show_dashboard_page),
         ("Transactions", show_transactions_page),
+        ("Budgets", show_budget_page),
         ("Categories", show_categories_page),
     ]
 
@@ -479,7 +949,7 @@ def open_dashboard(full_name):
                   anchor="w", padx=20, command=command).pack(fill="x", pady=2, ipady=8)
 
     show_dashboard_page()
-    
+
 show_login()
 
 root.mainloop()
