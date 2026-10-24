@@ -141,3 +141,9 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# MoneyMate local data and Python runtime files
+.backups/
+app_data/settings.json
+__pycache__/
+*.py[cod]
