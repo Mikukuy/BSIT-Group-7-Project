@@ -15,6 +15,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     transactions = relationship("Transaction", back_populates="user")
     categories = relationship("Category", back_populates="user")
+    budgets = relationship("Budget", back_populates="user")
 
 class Category(Base):
     __tablename__ = "categories"
@@ -26,12 +27,22 @@ class Category(Base):
 
     user = relationship("User", back_populates="categories")
 
+class Budget(Base):
+    __tablename__ = "budgets"
+
+    id = Column(Integer, primary_key=True)
+    category = Column(String, nullable=False)  # expense category name
+    limit_amount = Column(Float, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+    user = relationship("User", back_populates="budgets")
+
 class Transaction(Base):
     __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True)
-    type = Column(String)  # "income" or "expense"
-    category = Column(String)  # Stores the category name
+    type = Column(String)
+    category = Column(String)
     amount = Column(Float)
     date = Column(Date, default=date.today)
     notes = Column(String, nullable=True)
