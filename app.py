@@ -27,14 +27,16 @@ class MoneyMateApp:
     def __init__(self, root, settings_path=None):
         self.root = root
         self.settings_path = Path(settings_path or os.environ.get('MONEYMATE_SETTINGS_PATH', APP_DIR / 'app_data' / 'settings.json'))
+        self.settings = {}
+        try:
+            self.settings = json.loads(self.settings_path.read_text())
+        except (OSError, ValueError, AttributeError):
+            self.settings = {}
         self.logo_images = {}
         self.theme = 'light'
-        try:
-            value = json.loads(self.settings_path.read_text()).get('theme')
-            if value in THEMES:
-                self.theme = value
-        except (OSError, ValueError, AttributeError):
-            pass
+        value = self.settings.get('theme')
+        if value in THEMES:
+            self.theme = value
         families = tkfont.families(root)
         self.font = 'Segoe UI' if 'Segoe UI' in families else 'DejaVu Sans'
         self.auth = AuthSession()
@@ -100,11 +102,29 @@ class MoneyMateApp:
         b.bind('<Leave>', lambda e: b.configure(bg=bg))
         return b
 
-    def brand_logo(self, parent, filename, width):
-        key = (filename, width)
+    def resolve_logo_path(self, filename, settings_key=None):
+        configured = None
+        if settings_key:
+            configured = self.settings.get(settings_key)
+        if configured is None and settings_key in {'logo', 'sidebar_logo'}:
+            configured = self.settings.get('logo') if settings_key == 'sidebar_logo' else self.settings.get('sidebar_logo')
+        if configured:
+            candidate = Path(configured).expanduser()
+            if candidate.is_absolute():
+                return candidate
+            for base in (APP_DIR, APP_DIR / 'app_data'):
+                resolved = base / candidate
+                if resolved.exists():
+                    return resolved
+            return APP_DIR / candidate
+        return APP_DIR / filename
+
+    def brand_logo(self, parent, filename, width, settings_key=None):
+        resolved = self.resolve_logo_path(filename, settings_key)
+        key = (str(resolved), width)
         if key not in self.logo_images:
-            with Image.open(APP_DIR / filename) as source:
-                image = source.convert('RGB')
+            with Image.open(resolved) as source:
+                image = source.convert('RGBA')
             height = round(image.height * width / image.width)
             image = image.resize((width, height), Image.Resampling.LANCZOS)
             self.logo_images[key] = ImageTk.PhotoImage(image, master=self.root)
@@ -229,7 +249,7 @@ class MoneyMateApp:
         outer.rowconfigure(0, weight=1)
         brand = self.frame(outer, self.c['nav'])
         brand.grid(row=0, column=0, sticky='nsew')
-        self.brand_logo(brand, 'moneymate.jpg', 280).place(relx=0.5, rely=0.5, anchor='center')
+        self.brand_logo(brand, 'icon logo white.png', 400, settings_key='logo').place(relx=0.5, rely=0.5, anchor='center')
         right = self.frame(outer, self.c['bg'])
         right.grid(row=0, column=1, sticky='nsew')
         self.button(right, 'Light mode' if self.theme == 'dark' else 'Dark mode', self.toggle_theme, 'ghost').pack(anchor='e', padx=24, pady=20)
@@ -302,7 +322,7 @@ class MoneyMateApp:
         sidebar.pack_propagate(False)
         logo = self.frame(sidebar, self.c['nav'])
         logo.pack(fill='x', padx=22, pady=(30, 38))
-        self.brand_logo(logo, 'moneymate_horizontal.jpg', 168).pack(anchor='w')
+        self.brand_logo(logo, 'white logo.png', 168, settings_key='sidebar_logo').pack(anchor='w')
         self.label(sidebar, 'WORKSPACE', 8, '#8EA8D3', True).pack(anchor='w', padx=24, pady=(0, 12))
         for i, name in enumerate(['Dashboard', 'Transactions', 'Budgets', 'Categories', 'Archive']):
             active = self.page == name

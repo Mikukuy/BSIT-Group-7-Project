@@ -23,7 +23,9 @@ python3 -m venv .venv
 .venv/bin/python app.py
 ```
 
-Tkinter is part of most Python desktop installations. On Linux you may need the distribution's `python3-tk` package. A graphical desktop is required. SQLAlchemy handles data storage, and Pillow loads the horizontal JPEG logo; charts are drawn directly in Tkinter.
+Tkinter is part of most Python desktop installations. On Linux you may need the distribution's `python3-tk` package. A graphical desktop is required. SQLAlchemy handles data storage, and Pillow loads the app logos; charts are drawn directly in Tkinter.
+
+To change the visible brand logo, replace the image files in the project root (for example `moneymate.jpg` and `white logo.png`) or set `logo` and `sidebar_logo` in `app_data/settings.json` to new file paths or names. Relative paths are resolved from the project folder.
 
 ## What changed
 
